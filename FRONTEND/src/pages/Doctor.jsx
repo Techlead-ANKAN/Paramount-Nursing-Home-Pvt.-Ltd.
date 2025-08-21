@@ -8,7 +8,7 @@ const Doctor = () => {
   const [filteredDoctors, setFilteredDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedSpecialty, setSelectedSpecialty] = useState('')
+  const [selectedSpeciality, setSelectedSpeciality] = useState('')
 
   useEffect(() => {
     fetchDoctors()
@@ -16,7 +16,7 @@ const Doctor = () => {
 
   useEffect(() => {
     filterDoctors()
-  }, [doctors, searchTerm, selectedSpecialty])
+  }, [doctors, searchTerm, selectedSpeciality])
 
   const fetchDoctors = async () => {
     try {
@@ -51,10 +51,10 @@ const Doctor = () => {
       )
     }
 
-    // Filter by specialty
-    if (selectedSpecialty) {
+    // Filter by speciality
+    if (selectedSpeciality) {
       filtered = filtered.filter(doctor =>
-        doctor.speciality === selectedSpecialty
+        doctor.speciality === selectedSpeciality
       )
     }
 
@@ -98,22 +98,22 @@ const Doctor = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search doctors by name or specialty..."
+                placeholder="Search doctors by name or speciality..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
-            {/* Specialty Filter */}
+            {/* Speciality Filter */}
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <select
-                value={selectedSpecialty}
-                onChange={(e) => setSelectedSpecialty(e.target.value)}
+                value={selectedSpeciality}
+                onChange={(e) => setSelectedSpeciality(e.target.value)}
                 className="pl-10 pr-8 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
               >
-                <option value="">All Specialties</option>
+                <option value="">All Specialities</option>
                 {specialties.map((specialty) => (
                   <option key={specialty} value={specialty}>
                     {specialty}
@@ -135,7 +135,7 @@ const Doctor = () => {
                 No doctors found
               </h3>
               <p className="text-gray-600">
-                {searchTerm || selectedSpecialty 
+                {searchTerm || selectedSpeciality 
                   ? 'Try adjusting your search criteria.'
                   : 'No doctors are currently available.'
                 }

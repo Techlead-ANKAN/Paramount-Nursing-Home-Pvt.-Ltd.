@@ -8,6 +8,8 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
   const [doctors, setDoctors] = useState([])
   const [loading, setLoading] = useState(false)
   const [selectedDoctor, setSelectedDoctor] = useState(null)
+  const [availableSlots, setAvailableSlots] = useState([])
+  const [timeSlots, setTimeSlots] = useState([])
   
   const {
     register,
@@ -18,9 +20,11 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
   } = useForm()
 
   const watchDoctorId = watch('doctor_id')
+  const watchBookingDate = watch('booking_date')
 
   useEffect(() => {
     fetchDoctors()
+    fetchTimeSlots() // Fetch all possible time slots once
   }, [])
 
   useEffect(() => {
@@ -36,6 +40,14 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
     }
   }, [watchDoctorId, doctors])
 
+  useEffect(() => {
+    if (watchDoctorId && watchBookingDate) {
+      fetchAvailableSlots(watchDoctorId, watchBookingDate)
+    } else {
+      setAvailableSlots([])
+    }
+  }, [watchDoctorId, watchBookingDate])
+
   const fetchDoctors = async () => {
     try {
       const { data, error } = await supabase
@@ -49,6 +61,78 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
       console.error('Error fetching doctors:', error)
       toast.error('Failed to load doctors')
     }
+  }
+
+  const fetchTimeSlots = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('time_slots')
+        .select('*')
+        .eq('is_active', true)
+        .order('slot_time')
+
+      if (error) throw error
+      setTimeSlots(data || [])
+    } catch (error) {
+      console.error('Error fetching time slots:', error)
+    }
+  }
+
+  const fetchAvailableSlots = async (doctorId, date) => {
+    try {
+      // Get doctor's schedule for the selected day
+      const dayOfWeek = new Date(date).getDay()
+
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('doctor_schedules')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .eq('day_of_week', dayOfWeek)
+        .eq('is_active', true)
+        .single()
+
+      if (scheduleError || !scheduleData) {
+        setAvailableSlots([])
+        return
+      }
+
+      // Get booked slots for this doctor on this date
+      const { data: bookedSlots, error: bookedError } = await supabase
+        .from('bookings')
+        .select('booking_time')
+        .eq('doctor_id', doctorId)
+        .eq('booking_date', date)
+
+      if (bookedError) throw bookedError
+
+      const bookedTimes = bookedSlots.map(slot => slot.booking_time)
+
+      // Filter time slots that are within doctor's schedule and not booked
+      const available = timeSlots.filter(slot => {
+        const slotTime = slot.slot_time
+        const isWithinSchedule = slotTime >= scheduleData.start_time && slotTime <= scheduleData.end_time
+        const isNotBooked = !bookedTimes.includes(slotTime)
+        return isWithinSchedule && isNotBooked
+      })
+
+      setAvailableSlots(available)
+    } catch (error) {
+      console.error('Error fetching available slots:', error)
+      setAvailableSlots([])
+    }
+  }
+
+  const formatTime = (time) => {
+    return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+
+  const getDayName = (dayNumber) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    return days[dayNumber]
   }
 
   const onSubmit = async (data) => {
@@ -105,21 +189,6 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
     }
   }
 
-  const getAvailableTimes = () => {
-    if (!selectedDoctor) return []
-    
-    const times = []
-    const startHour = 9 // 9 AM
-    const endHour = 17 // 5 PM
-    
-    for (let hour = startHour; hour < endHour; hour++) {
-      times.push(`${hour.toString().padStart(2, '0')}:00`)
-      times.push(`${hour.toString().padStart(2, '0')}:30`)
-    }
-    
-    return times
-  }
-
   return (
     <div className="bg-white rounded-xl shadow-lg p-8">
       <div className="mb-8">
@@ -142,6 +211,7 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
             {doctors.map((doctor) => (
               <option key={doctor.id} value={doctor.id}>
                 Dr. {doctor.name} - {doctor.speciality}
+                {doctor.registration_no && ` (Reg: ${doctor.registration_no})`}
               </option>
             ))}
           </select>
@@ -277,16 +347,26 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
             <select
               {...register('booking_time', { required: 'Please select a time' })}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={!watchDoctorId || !watchBookingDate || availableSlots.length === 0}
             >
-              <option value="">Select time...</option>
-              {getAvailableTimes().map((time) => (
-                <option key={time} value={time}>
-                  {time}
+              <option value="">
+                {!watchDoctorId ? 'Select a doctor first' :
+                 !watchBookingDate ? 'Select a date first' :
+                 availableSlots.length === 0 ? 'No available slots' : 'Select time...'}
+              </option>
+              {availableSlots.map((slot) => (
+                <option key={slot.id} value={slot.slot_time}>
+                  {formatTime(slot.slot_time)}
                 </option>
               ))}
             </select>
             {errors.booking_time && (
               <p className="text-red-600 text-sm mt-1">{errors.booking_time.message}</p>
+            )}
+            {watchDoctorId && watchBookingDate && availableSlots.length === 0 && (
+              <p className="text-orange-600 text-sm mt-1">
+                No available slots for this date. Please select another date.
+              </p>
             )}
           </div>
         </div>
@@ -334,8 +414,11 @@ const BookingForm = ({ selectedDoctorId, onBookingComplete }) => {
             </div>
             <div>
               <p className="font-semibold text-gray-900">Dr. {selectedDoctor.name}</p>
-                              <p className="text-blue-600">{selectedDoctor.speciality}</p>
+              <p className="text-blue-600">{selectedDoctor.speciality}</p>
               <p className="text-sm text-gray-600">{selectedDoctor.experience} years experience</p>
+              {selectedDoctor.registration_no && (
+                <p className="text-sm text-gray-500">Registration: {selectedDoctor.registration_no}</p>
+              )}
             </div>
           </div>
         </div>

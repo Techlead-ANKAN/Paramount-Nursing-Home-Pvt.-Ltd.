@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import AdminAuth from '../components/AdminAuth'
+import DoctorScheduleManager from '../components/DoctorScheduleManager'
 import { 
   Users, 
   Calendar, 
@@ -54,6 +55,7 @@ const AdminDashboard = () => {
   const [patients, setPatients] = useState([])
   const [bookings, setBookings] = useState([])
   const [contactMessages, setContactMessages] = useState([])
+  const [cancelledBookings, setCancelledBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDoctor, setSelectedDoctor] = useState(null)
@@ -63,6 +65,8 @@ const AdminDashboard = () => {
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [showMessageDetailsModal, setShowMessageDetailsModal] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState(null)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [selectedDoctorForSchedule, setSelectedDoctorForSchedule] = useState(null)
 
   useEffect(() => {
     // Check if admin is already authenticated
@@ -81,22 +85,28 @@ const AdminDashboard = () => {
   const fetchAllData = async () => {
     setLoading(true)
     try {
-      // Fetch all data in parallel
-      const [doctorsData, patientsData, bookingsData, messagesData] = await Promise.all([
-        supabase.from('doctors').select('*').order('name'),
-        supabase.from('patients').select('*').order('name'),
-        supabase.from('bookings').select(`
-          *,
-          patients (name, phone, email, age, gender),
-          doctors (name, speciality, experience, consultation_timings)
-        `).order('created_at', { ascending: false }),
-        supabase.from('contact_messages').select('*').order('created_at', { ascending: false })
-      ])
+             // Fetch all data in parallel
+       const [doctorsData, patientsData, bookingsData, messagesData, cancelledBookingsData] = await Promise.all([
+         supabase.from('doctors').select('*').order('name'),
+         supabase.from('patients').select('*').order('name'),
+         supabase.from('bookings').select(`
+           *,
+           patients (name, phone, email, age, gender),
+           doctors (name, speciality, experience, registration_no)
+         `).order('created_at', { ascending: false }),
+         supabase.from('contact_messages').select('*').order('created_at', { ascending: false }),
+         supabase.from('cancelled_bookings').select(`
+           *,
+           patients (name, phone, email, age, gender),
+           doctors (name, speciality, experience, registration_no)
+         `).order('created_at', { ascending: false })
+       ])
 
-      setDoctors(doctorsData.data || [])
-      setPatients(patientsData.data || [])
-      setBookings(bookingsData.data || [])
-      setContactMessages(messagesData.data || [])
+             setDoctors(doctorsData.data || [])
+       setPatients(patientsData.data || [])
+       setBookings(bookingsData.data || [])
+       setContactMessages(messagesData.data || [])
+       setCancelledBookings(cancelledBookingsData.data || [])
     } catch (error) {
       console.error('Error fetching data:', error)
       toast.error('Failed to load admin data')
@@ -193,6 +203,15 @@ const AdminDashboard = () => {
     }
   }
 
+  const handleManageSchedule = (doctor) => {
+    setSelectedDoctorForSchedule(doctor)
+    setShowScheduleModal(true)
+  }
+
+  const handleScheduleUpdated = () => {
+    fetchAllData()
+  }
+
   const updateBookingStatus = async (bookingId, newStatus) => {
     try {
       const { error } = await supabase
@@ -251,26 +270,30 @@ const AdminDashboard = () => {
       let data = []
       let filename = ''
 
-      switch (type) {
-        case 'doctors':
-          data = doctors
-          filename = 'doctors.csv'
-          break
-        case 'patients':
-          data = patients
-          filename = 'patients.csv'
-          break
-        case 'bookings':
-          data = bookings
-          filename = 'bookings.csv'
-          break
-        case 'messages':
-          data = contactMessages
-          filename = 'messages.csv'
-          break
-        default:
-          return
-      }
+             switch (type) {
+         case 'doctors':
+           data = doctors
+           filename = 'doctors.csv'
+           break
+         case 'patients':
+           data = patients
+           filename = 'patients.csv'
+           break
+         case 'bookings':
+           data = bookings
+           filename = 'bookings.csv'
+           break
+         case 'cancelled_bookings':
+           data = cancelledBookings
+           filename = 'cancelled_bookings.csv'
+           break
+         case 'messages':
+           data = contactMessages
+           filename = 'messages.csv'
+           break
+         default:
+           return
+       }
 
       // Convert to CSV
       const headers = Object.keys(data[0] || {}).join(',')
@@ -394,14 +417,15 @@ const AdminDashboard = () => {
         <div className="bg-white rounded-lg shadow mb-8">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
-              {[
-                { id: 'overview', name: 'Overview', icon: BarChart3 },
-                { id: 'doctors', name: 'Doctors', icon: Users },
-                { id: 'patients', name: 'Patients', icon: User },
-                { id: 'bookings', name: 'Bookings', icon: Calendar },
-                { id: 'messages', name: 'Messages', icon: MessageSquare },
-                { id: 'settings', name: 'Settings', icon: Settings }
-              ].map((tab) => {
+                             {[
+                 { id: 'overview', name: 'Overview', icon: BarChart3 },
+                 { id: 'doctors', name: 'Doctors', icon: Users },
+                 { id: 'patients', name: 'Patients', icon: User },
+                 { id: 'bookings', name: 'Bookings', icon: Calendar },
+                 { id: 'cancelled', name: 'Cancelled', icon: X },
+                 { id: 'messages', name: 'Messages', icon: MessageSquare },
+                 { id: 'settings', name: 'Settings', icon: Settings }
+               ].map((tab) => {
                 const Icon = tab.icon
                 return (
                   <button
@@ -426,39 +450,50 @@ const AdminDashboard = () => {
             {activeTab === 'overview' && (
               <OverviewTab stats={stats} bookings={bookings} />
             )}
-            {activeTab === 'doctors' && (
-              <DoctorsTab 
-                doctors={doctors} 
-                onAddDoctor={handleAddDoctor}
-                onEditDoctor={handleEditDoctor}
-                onDeleteDoctor={handleDeleteDoctor}
-                showAddModal={showAddDoctorModal}
-                setShowAddModal={setShowAddDoctorModal}
-                showEditModal={showEditDoctorModal}
-                setShowEditModal={setShowEditDoctorModal}
-                selectedDoctor={selectedDoctor}
-                setSelectedDoctor={setSelectedDoctor}
-                onExport={() => exportData('doctors')}
-              />
-            )}
+                         {activeTab === 'doctors' && (
+               <DoctorsTab 
+                 doctors={doctors} 
+                 onAddDoctor={handleAddDoctor}
+                 onEditDoctor={handleEditDoctor}
+                 onDeleteDoctor={handleDeleteDoctor}
+                 onManageSchedule={handleManageSchedule}
+                 showAddModal={showAddDoctorModal}
+                 setShowAddModal={setShowAddDoctorModal}
+                 showEditModal={showEditDoctorModal}
+                 setShowEditModal={setShowEditDoctorModal}
+                 selectedDoctor={selectedDoctor}
+                 setSelectedDoctor={setSelectedDoctor}
+                 onExport={() => exportData('doctors')}
+               />
+             )}
             {activeTab === 'patients' && (
               <PatientsTab 
                 patients={patients} 
                 onExport={() => exportData('patients')}
               />
             )}
-            {activeTab === 'bookings' && (
-              <BookingsTab 
-                bookings={bookings} 
-                onUpdateStatus={updateBookingStatus}
-                onExport={() => exportData('bookings')}
-                showDetailsModal={showBookingDetailsModal}
-                setShowDetailsModal={setShowBookingDetailsModal}
-                selectedBooking={selectedBooking}
-                setSelectedBooking={setSelectedBooking}
-              />
-            )}
-            {activeTab === 'messages' && (
+                         {activeTab === 'bookings' && (
+               <BookingsTab 
+                 bookings={bookings} 
+                 onUpdateStatus={updateBookingStatus}
+                 onExport={() => exportData('bookings')}
+                 showDetailsModal={showBookingDetailsModal}
+                 setShowDetailsModal={setShowBookingDetailsModal}
+                 selectedBooking={selectedBooking}
+                 setSelectedBooking={setSelectedBooking}
+               />
+             )}
+             {activeTab === 'cancelled' && (
+               <CancelledBookingsTab 
+                 cancelledBookings={cancelledBookings} 
+                 onExport={() => exportData('cancelled_bookings')}
+                 showDetailsModal={showBookingDetailsModal}
+                 setShowDetailsModal={setShowBookingDetailsModal}
+                 selectedBooking={selectedBooking}
+                 setSelectedBooking={setSelectedBooking}
+               />
+             )}
+             {activeTab === 'messages' && (
               <MessagesTab 
                 messages={contactMessages}
                 onMarkAsRead={markMessageAsRead}
@@ -476,6 +511,18 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Schedule Manager Modal */}
+      {showScheduleModal && selectedDoctorForSchedule && (
+        <DoctorScheduleManager
+          doctor={selectedDoctorForSchedule}
+          onClose={() => {
+            setShowScheduleModal(false)
+            setSelectedDoctorForSchedule(null)
+          }}
+          onScheduleUpdated={handleScheduleUpdated}
+        />
+      )}
     </div>
   )
 }
@@ -540,12 +587,75 @@ const OverviewTab = ({ stats, bookings }) => {
   )
 }
 
+// Doctor Schedule Display Component
+const DoctorScheduleDisplay = ({ doctorId }) => {
+  const [schedules, setSchedules] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchSchedules()
+  }, [doctorId])
+
+  const fetchSchedules = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('doctor_schedules')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .eq('is_active', true)
+        .order('day_of_week')
+
+      if (error) throw error
+      setSchedules(data || [])
+    } catch (error) {
+      console.error('Error fetching schedules:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getDayName = (dayNumber) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    return days[dayNumber]
+  }
+
+  const formatTime = (time) => {
+    return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+
+  if (loading) {
+    return <div className="text-xs text-gray-500">Loading...</div>
+  }
+
+  if (schedules.length === 0) {
+    return <div className="text-xs text-gray-500">No schedule set</div>
+  }
+
+  return (
+    <div className="text-xs">
+      {schedules.slice(0, 2).map((schedule) => (
+        <div key={schedule.id} className="text-gray-600">
+          {getDayName(schedule.day_of_week)}: {formatTime(schedule.start_time)}-{formatTime(schedule.end_time)}
+        </div>
+      ))}
+      {schedules.length > 2 && (
+        <div className="text-gray-500">+{schedules.length - 2} more</div>
+      )}
+    </div>
+  )
+}
+
 // Doctors Tab Component
 const DoctorsTab = ({ 
   doctors, 
   onAddDoctor, 
   onEditDoctor, 
   onDeleteDoctor,
+  onManageSchedule,
   showAddModal,
   setShowAddModal,
   showEditModal,
@@ -558,8 +668,10 @@ const DoctorsTab = ({
     name: '',
     speciality: '',
     experience: '',
-    consultation_timings: ''
+    registration_no: '',
+    image_url: ''
   })
+  const [scheduleData, setScheduleData] = useState([])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -568,7 +680,7 @@ const DoctorsTab = ({
     } else {
       onAddDoctor(formData)
     }
-    setFormData({ name: '', speciality: '', experience: '', consultation_timings: '' })
+    setFormData({ name: '', speciality: '', experience: '', registration_no: '', image_url: '' })
   }
 
   const handleEdit = (doctor) => {
@@ -577,7 +689,8 @@ const DoctorsTab = ({
       name: doctor.name,
       speciality: doctor.speciality,
       experience: doctor.experience.toString(),
-      consultation_timings: doctor.consultation_timings
+      registration_no: doctor.registration_no || '',
+      image_url: doctor.image_url || ''
     })
     setShowEditModal(true)
   }
@@ -617,12 +730,15 @@ const DoctorsTab = ({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Experience
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Timings
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
+                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Registration
+               </th>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Schedule
+               </th>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Actions
+               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -644,10 +760,13 @@ const DoctorsTab = ({
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">{doctor.experience} years</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{doctor.consultation_timings}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                 <td className="px-6 py-4 whitespace-nowrap">
+                   <div className="text-sm text-gray-900">{doctor.registration_no || 'N/A'}</div>
+                 </td>
+                 <td className="px-6 py-4 whitespace-nowrap">
+                   <DoctorScheduleDisplay doctorId={doctor.id} />
+                 </td>
+                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(doctor)}
@@ -655,6 +774,13 @@ const DoctorsTab = ({
                       title="Edit Doctor"
                     >
                       <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => onManageSchedule(doctor)}
+                      className="text-green-600 hover:text-green-900"
+                      title="Manage Schedule"
+                    >
+                      <Clock className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => onDeleteDoctor(doctor.id)}
@@ -711,14 +837,24 @@ const DoctorsTab = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Consultation Timings</label>
+                  <label className="block text-sm font-medium text-gray-700">Registration Number</label>
                   <input
                     type="text"
-                    value={formData.consultation_timings}
-                    onChange={(e) => setFormData({...formData, consultation_timings: e.target.value})}
+                    value={formData.registration_no}
+                    onChange={(e) => setFormData({...formData, registration_no: e.target.value})}
                     className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="e.g., Mon-Fri: 9:00 AM - 5:00 PM"
+                    placeholder="e.g., REG-12345678"
                     required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Image URL (optional)</label>
+                  <input
+                    type="url"
+                    value={formData.image_url}
+                    onChange={(e) => setFormData({...formData, image_url: e.target.value})}
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="https://example.com/doctor-image.jpg"
                   />
                 </div>
                 <div className="flex justify-end space-x-3">
@@ -727,7 +863,7 @@ const DoctorsTab = ({
                     onClick={() => {
                       setShowAddModal(false)
                       setShowEditModal(false)
-                      setFormData({ name: '', speciality: '', experience: '', consultation_timings: '' })
+                      setFormData({ name: '', speciality: '', experience: '', registration_no: '', image_url: '' })
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                   >
@@ -978,10 +1114,103 @@ const BookingsTab = ({ bookings, onUpdateStatus, onExport, showDetailsModal, set
         </div>
       )}
     </div>
-  )
-}
+     )
+ }
 
-// Messages Tab Component
+ // Cancelled Bookings Tab Component
+ const CancelledBookingsTab = ({ cancelledBookings, onExport, showDetailsModal, setShowDetailsModal, selectedBooking, setSelectedBooking }) => {
+   return (
+     <div>
+       <div className="flex justify-between items-center mb-6">
+         <h3 className="text-lg font-semibold text-gray-900">Cancelled Bookings</h3>
+         <div className="flex space-x-2">
+           <button
+             onClick={onExport}
+             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center"
+           >
+             <Download className="h-4 w-4 mr-2" />
+             Export
+           </button>
+         </div>
+       </div>
+
+       <div className="bg-white rounded-lg shadow overflow-hidden">
+         <table className="min-w-full divide-y divide-gray-200">
+           <thead className="bg-gray-50">
+             <tr>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Patient
+               </th>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Doctor
+               </th>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Date & Time
+               </th>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Cancellation Reason
+               </th>
+               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                 Actions
+               </th>
+             </tr>
+           </thead>
+           <tbody className="bg-white divide-y divide-gray-200">
+             {cancelledBookings.map((booking) => (
+               <tr key={booking.id}>
+                 <td className="px-6 py-4 whitespace-nowrap">
+                   <div>
+                     <div className="text-sm font-medium text-gray-900">{booking.patients?.name}</div>
+                     <div className="text-sm text-gray-500">{booking.patients?.phone}</div>
+                   </div>
+                 </td>
+                 <td className="px-6 py-4 whitespace-nowrap">
+                   <div>
+                     <div className="text-sm font-medium text-gray-900">Dr. {booking.doctors?.name}</div>
+                     <div className="text-sm text-gray-500">{booking.doctors?.speciality}</div>
+                   </div>
+                 </td>
+                 <td className="px-6 py-4 whitespace-nowrap">
+                   <div>
+                     <div className="text-sm font-medium text-gray-900">
+                       {format(new Date(booking.booking_date), 'MMM dd, yyyy')}
+                     </div>
+                     <div className="text-sm text-gray-500">{booking.booking_time}</div>
+                   </div>
+                 </td>
+                 <td className="px-6 py-4 whitespace-nowrap">
+                   <div className="text-sm text-gray-900">{booking.cancellation_reason || 'No reason provided'}</div>
+                 </td>
+                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                   <div className="flex space-x-2">
+                     <button
+                       onClick={() => {
+                         setSelectedBooking(booking)
+                         setShowDetailsModal(true)
+                       }}
+                       className="text-purple-600 hover:text-purple-900"
+                       title="View Details"
+                     >
+                       <Eye className="h-4 w-4" />
+                     </button>
+                   </div>
+                 </td>
+               </tr>
+             ))}
+           </tbody>
+         </table>
+       </div>
+
+       {cancelledBookings.length === 0 && (
+         <div className="text-center py-8">
+           <p className="text-gray-500">No cancelled bookings found.</p>
+         </div>
+       )}
+     </div>
+   )
+ }
+
+ // Messages Tab Component
 const MessagesTab = ({ messages, onMarkAsRead, onDelete, onExport, showDetailsModal, setShowDetailsModal, selectedMessage, setSelectedMessage }) => {
   return (
     <div>
@@ -1089,6 +1318,7 @@ const MessagesTab = ({ messages, onMarkAsRead, onDelete, onExport, showDetailsMo
           </div>
         </div>
       )}
+
     </div>
   )
 }
