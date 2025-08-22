@@ -16,8 +16,8 @@ const Footer = () => {
               <span className="ml-3 text-xl font-bold">Paramount Nursing Home</span>
             </div>
             <p className="text-gray-300 mb-4 max-w-md">
-              Providing exceptional healthcare services with compassion and excellence. 
-              Your health is our priority, and we're committed to delivering the best 
+              Providing exceptional healthcare services with compassion and excellence.
+              Your health is our priority, and we're committed to delivering the best
               medical care in a comfortable and professional environment.
             </p>
             <div className="flex space-x-4">
@@ -71,13 +71,13 @@ const Footer = () => {
               <div className="flex items-start">
                 <MapPin className="h-4 w-4 mr-2 mt-1 text-blue-400" />
                 <span className="text-gray-300 text-sm">
-                  123 Healthcare Avenue, Medical District, City - 123456
+                  109/1, Hazra Rd, Hazra, Kalighat, Kolkata, West Bengal 700026
                 </span>
               </div>
               <div className="flex items-center">
                 <Clock className="h-4 w-4 mr-2 text-blue-400" />
                 <span className="text-gray-300 text-sm">
-                  Mon-Sat: 8:00 AM - 8:00 PM
+                  Mon-Sun: 8:00 AM - 10:00 PM
                 </span>
               </div>
               <div className="flex items-center">

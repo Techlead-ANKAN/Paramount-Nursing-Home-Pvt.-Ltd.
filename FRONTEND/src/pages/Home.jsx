@@ -39,8 +39,8 @@ const Home = () => {
 
   const stats = [
     { number: '5000+', label: 'Happy Patients' },
-    { number: '50+', label: 'Expert Doctors' },
-    { number: '15+', label: 'Years Experience' },
+    { number: '25+', label: 'Expert Doctors' },
+    { number: '25+', label: 'Years Experience' },
     { number: '24/7', label: 'Emergency Care' }
   ]
 
@@ -100,12 +100,6 @@ const Home = () => {
         </div>
       </section>
 
-      {/* Supabase Test Section - Temporary for debugging */}
-      <section className="py-8 bg-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <SupabaseTest />
-        </div>
-      </section>
 
       {/* Stats Section */}
       <section className="py-16 bg-gray-50">
